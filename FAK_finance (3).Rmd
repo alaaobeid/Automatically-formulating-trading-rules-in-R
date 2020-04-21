@@ -1,0 +1,617 @@
+---
+title: "Formulating Trading Rules"
+author: "Alaa Mohamed Elobaid (201993916)"
+date: "03/04/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+-------------------------------------------------------------------------
+
+
+
+<h3><ins>1 - Problem Background</ins></h3><br>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+The following R notebook aims to evolve financial trading rules using Genetic Programming. 
+
+Automatically formualting trading rules is a huge area, so in order to narrow our scope we have focused on using Genetic Programming to evolve a function of future stock close prices, using this as a means of automatically buying and selling stock.  
+
+
+
+------------------------------------------------------------------------
+
+
+```{r}
+library(quantmod)
+library(gramEvol)
+library(TTR)
+library(dygraphs)
+library(tsbox)
+
+```
+
+---
+
+<h3><ins>2 - Background on the data</ins></h3><br>
+
+We chose to use Amazon stock data as it has nice variation throughout the year. This is beneficial, as our Genetic Program takes a lagged dataframe as input, represenatig N days worth of returns in one row). 
+
+Using the lagged data, our GP will predict the `Close` price for the latter half of 2019's stock returns.
+
+This predicted function will then be used to inform our trading rules, makine desicions about whether to buy or sell stock based on `Simple Moving Averages` and `RSI`. 
+
+Here we set the four seperate dataframes so that our GP can predict the stock values. 
+---
+
+```{r}
+
+df <- read.table("Amazon_format.csv", header=TRUE, sep=",")
+amazon_close_price <- df$Close
+amazon_data <- data.frame(amazon_close_price, 
+                          x1=Lag(amazon_close_price,1), 
+                          x2=Lag(amazon_close_price,2))
+names(amazon_data) <- c('y','x1','x2')
+
+amazon_data <- amazon_data[6:253,]
+
+
+datz = zoo(amazon_data)
+
+
+```
+
+
+
+---
+
+<h4><ins>2.1 - Plot the Data</ins></h4><br>
+
+Let's have a look at the data. 
+
+<br>
+
+```{r}
+
+plot.ts(amazon_data$y, type='l', col='red',
+     main="Amazon Stock Close Price: 2015-2020",
+     xlab="Days",
+     ylab="Close Price")
+
+
+
+```
+
+---
+
+<h4><ins>2.2 - Split The Data</ins></h4><br>
+
+We created a validation set that takes half the instances, this data will be used to test the accuracy of the Genetic Program.
+
+<br>
+
+
+```{r}
+
+amazon_data <- amazon_data[c(3: 252),]
+amazon_training_validation = amazon_data['y'][0:120,]
+amazon_validation = amazon_data['y'][120:253,]
+amazon_train <- amazon_data[0:120,]
+amazon_test <- amazon_data[120:252,]
+amazon_test_labels <- amazon_test['y']
+drop <- c('y')
+amazon_test <- amazon_test[, !(names(amazon_test) %in% drop)]
+amazon_test_labels <- amazon_test_labels[complete.cases(amazon_test_labels),]
+amazon_test <- amazon_test[complete.cases(amazon_test),]
+
+```
+
+
+
+<h3><ins>3 - Details of Approach</ins></h3><br>
+
+<h4><ins>3.1 - Grammatical Rules</ins></h4><br>
+
+Below we outline the grammatical rules that we used inside our Genetic Program. 
+
+The grammar rule operations were as follows:
+
+1. `+`
+2. `-`
+3. `*`
+4. `^`
+
+Together with these simple operataions, We enabled the GP to use four other functions:
+
+1. `sin`
+2. `exp`
+3. `cos`
+4. `log`
+
+With this relatively basic suite of operations and functions we aimed to evolve a function that predcits a close price given the previous two days' trading figures. 
+
+<br>
+
+```{r}
+
+fin_rules <- list(expr = grule(op(expr, expr), func(expr), var),
+                   func = grule(sin, cos),
+                   op = grule('+', '-', '*'),
+                   var = grule(amazon_train$x1, amazon_train$x2))
+
+grammer_def <- CreateGrammar(fin_rules)
+
+```
+
+
+
+<h4><ins>3.2 - Fitness Function</ins></h4><br>
+
+
+With our rules in place, it's simply a case of creating our fitness function. The Genetic Program evolves a solution, whie the fitness function measures the accuracy of this solution based on the input. 
+
+<br>
+
+
+```{r}
+
+
+fin_fitness <- function(expr) {
+  
+  result <- eval(expr)
+  if (any(is.nan(result)))
+    return(Inf)
+  return (mean(log(1 + abs(amazon_train$y - result))))
+  
+}
+
+```
+
+
+
+<h4><ins>3.3 - Fit the Models</ins></h4><br>
+
+With each of our functions in place we can now ask the GP to evolve a solution. This function will then be used to predict the next N days stock close prices for amazon and thus used to produce buy and sell signals. 
+
+
+```{r}
+
+set.seed(314)
+ge <- GrammaticalEvolution(grammer_def, 
+                           fin_fitness,
+                           terminationCost=0.1,
+                           iterations=500,
+                           max.depth=5)
+ge
+
+```
+
+
+
+<h4><ins>3.4 - Our Predicitive Function</ins></h4><br>
+
+After fitting our GP it has now output a pedictive function used to see into the future. 
+
+<br>
+
+```{r}
+
+ge
+
+```
+
+
+```{r}
+
+ge$best$expressions
+
+```
+
+
+
+
+
+
+<h4><ins>3.4 - Creating The Predictions</ins></h4><br>
+
+Using our evolved function and the test data we can ask the GP to show us how well the stock will do for the second half of the year. 
+
+<br>
+
+```{r}
+
+data_full <- amazon_test
+d = eval(ge$best$expressions)
+
+```
+
+<br> 
+
+We can now use these values to plot the predicted returns on the validation set against the actual validation returns. 
+
+
+<br>
+
+```{r}
+
+predictions = data.frame(d)
+colnames(predictions) <- c("close")
+
+
+```
+
+
+```{r}
+
+plot(amazon_training_validation, type='l', col='red',
+     main="Close Price: Actual Close Prices vs. Training Predictions",
+     xlab="Days",
+     ylab="Returns")
+legend(x='topleft', y='0.92', legend=c("Actual Close Price", "Training Predicted Close Price"),
+       col=c("red", "green"), lty=1:2, cex=0.8)
+points(eval(ge$best$expressions), col = "green", type= "l")
+
+
+
+```
+
+
+<h3><ins>3.5 - Optimal Expression and Predicted Returns</ins></h4><br>
+
+The `GrammaticalEvolver` produces the best expression (it's the best estimation of a function that will accruately make a prediction). 
+
+We access the best exprression through the GP object and create a small function that creates a new column using the optimal, evolved function. 
+
+We then used the R `transform` method to automatically add a column to output a dataframe using this optimal function. 
+
+<br>
+
+```{r}
+
+exprs = ge$best$expressions
+
+print(exprs)
+
+prediction_function <- amazon_test$x1 - (sin(amazon_test$x1) - sin(sin(sin(amazon_test$x2))))
+
+```
+
+
+
+<h3><ins>3.3 - Adding the prediction column</ins></h4><br>
+
+Rather than use a loop (not good `R` practice) the `transform` method applies the transformation vector-wise across the dataframe. 
+
+<br>
+
+```{r}
+
+amazon_test_with_predict <- transform(amazon_test, prediction = prediction_function)
+
+```
+
+
+We just need to test all of these predictions against their respective testing sets, once that's complete we will then concatenate the values into the one fully predicted stock prices for Amazon. 
+
+<br>
+
+This resulted in a new column that reflects the GP prediction based on the `x1` and `x2` feature values. 
+
+<br>
+
+```{r}
+
+head(amazon_test_with_predict, 5)
+
+```
+
+<h3><ins>3.4 - Plotting Actual Close Prices vs Predicted Close Prices (test set)</ins></h4><br>
+
+
+The accuracy of the model on the test set can be visualised with the following graph. 
+
+<br>
+
+
+```{r}
+
+plot(amazon_test_labels, type='l', col='red', 
+     main="Close Price: Test Actual vs. Test Predictions",
+     xlab="Days",
+     ylab="Return")
+legend(x='topleft', y='0.92', legend=c("Test Actual", "Test Predictions"),
+       col=c("red", "green"), lty=1:2, cex=0.8)
+points(amazon_test_with_predict['prediction'], col = "green", type= "l")
+
+
+
+```
+
+
+<h3><ins>3.5 - Prediction Accuracy</ins></h3><br>
+
+Here we pulled all of our predicted figures into one dataframe to get an idea of how well we have predicted future Close Prices. 
+
+The GP had a `Mean Squared Error` of `4%`. This error could be lower depending on the stock that's being used and the seed being used by the GP to generate the solution.
+
+
+<br>
+
+
+```{r}
+
+amazon_test_with_predict$actual_return = amazon_test_labels
+error_function <- sqrt((abs(amazon_test_with_predict$prediction - amazon_test_with_predict$actual_return)))
+amazon_test_with_predict <- transform(amazon_test_with_predict, error = error_function)
+
+mean_ret <- mean(amazon_test_with_predict$actual_return)
+mean_prediction <- mean(amazon_test_with_predict$prediction)
+mean_error <- mean(amazon_test_with_predict$error)
+ret_pred_dif = abs(mean_ret - mean_prediction)
+
+Test_Measurements = c("Mean Average Actual Close Prices",
+              "Mean Average Prediction",
+              "Actual / Prediction Diff",
+              "Root Mean Squared Error")
+
+Test_Values = c(mean_ret,
+         mean_prediction,
+         ret_pred_dif,
+         mean_error)
+
+amazon_predictions = data.frame(Test_Measurements, Test_Values)
+
+amazon_predictions
+
+```
+
+
+
+All our predictions are performing well. All the predictions are then put into one dataframe.
+
+```{r}
+
+
+amazon_total_predict <- data.frame(amazon_test_with_predict$prediction
+                                   )
+colnames(amazon_total_predict) <- c("Close")
+
+amazon_total_predict
+
+
+```
+
+
+
+<h3><ins>4 - Trading Rules</ins></h3><br>
+
+<h4><ins>4.1 - Simple Moving Averages & RSI</ins></h4><br>
+
+With our predicted function matching with the test data, we can go ahead and begin building our trading rules. 
+
+To begin we are going to calculate the 05-day and 10-day `Simple Moving Average`, as well as the stock `RSI` with a 05-day lookback. 
+
+We then need to remove `Null` values from these vectors. 
+
+<br>
+
+
+```{r}
+
+sma_05 = SMA(amazon_total_predict$Close, n=05)
+sma_10 = SMA(amazon_total_predict$Close, n=10)
+rsi_05 = RSI(amazon_total_predict$Close, n=5)
+
+sma_05 <- sma_05[complete.cases(sma_05)]
+sma_10 <- sma_10[complete.cases(sma_10)]
+rsi_05 <- rsi_05[complete.cases(rsi_05)]
+```
+
+
+<h4><ins>4.2 - Plotting Averages & RSI</ins></h4><br>
+
+
+Plot these moving averages and RSI. 
+
+<br>
+
+```{r}
+
+plot(sma_05, type='l', col='red', 
+     main="Amazon Stock Close Price: SMA_05 vs SMA_10",
+     xlab="Days",
+     ylab="Return")
+legend(x='topleft', y='0.92', legend=c("SMA 05", "SMA 10"),
+       col=c("red", "green"), lty=1:2, cex=0.8)
+points(sma_10, col = "green", type= "l")
+
+
+
+```
+
+
+```{r}
+
+plot(rsi_05, type='l', col='red', 
+     main="Amazon Predicted RSI - Five Day Lookback",
+     xlab="Days",
+     ylab="Close Price")
+
+
+```
+
+
+<h4><ins>4.2 - Buying and Selling Signals/ins></h4><br>
+
+Creation of `buying and selling signals`. These are binary values (1 and -1) that indicate whether to buy or sell a particular stock. 
+
+The trading strategy is as follows:<br>
+
+1. <b>Buy: When SMA05 > SMA10 and RSI < 40</b>
+2. <b>Sell: When SMA05 < SMA10 or RSI > 75</b>
+3. <b>Hold : otherwise
+<br>
+
+
+```{r}
+
+buying_signal <- NULL
+
+
+y<-2
+h<-1
+for(i in 1:length(sma_10)) {
+  
+  if (sma_05[i] > sma_10[i] && rsi_05 < 40 && y !=1 ) {
+    
+    buying_signal[i] = 1
+    y<-1
+  } else if (sma_05[i] < sma_10[i] && y !=-1   || rsi_05 > 75 && y !=-1 ) {
+    
+    buying_signal[i] = -1
+    y<--1
+
+  }
+}
+buying_signal[is.na(buying_signal)] <- 0
+print(buying_signal)
+
+```
+
+<h3><ins>4.3 - Enter & Exit Price/ins></h3><br>
+
+Using this list of buying and selling signals we can then construct two dataframes to reflect the price when entering or exiting a trade:
+
+
+1. `buy_points`: This is the price we buy amazon stock for. 
+2. `sell_points`: This is the price at which we sell amazon stock. 
+
+
+The summed subtraction of these values represents the predicted amount of profit from the evolved function. 
+
+<br>
+
+```{r}
+
+actual_with_dec <- amazon_test_with_predict$actual_return[1:length(buying_signal)]
+pred_with_dec <- amazon_test_with_predict$prediction[1:length(buying_signal)]
+
+buy_sell_decisions <- data.frame(actual_with_dec, pred_with_dec, buying_signal)
+buy_points <- c()
+sell_points <- c()
+
+for (i in 1:length(actual_with_dec)) {
+  if (buy_sell_decisions$buying_signal[i] == 1) {
+    buy_points <- c(buy_points, buy_sell_decisions$actual_with_dec[i])
+  }
+  else if (buy_sell_decisions$buying_signal[i] == -1) {
+    sell_points <- c(sell_points, buy_sell_decisions$actual_with_dec[i])
+  }
+}
+buy_points<-buy_points[1:(length(buy_points)-1)]
+sell_points<-sell_points[2:length(sell_points)]
+```
+
+
+<h4><ins>5 - Calculate Profit</ins></h4><br>
+
+<h3><ins>5.1 - Predicted Profit</ins></h3><br>
+
+
+Now that we have a predicted dataframe that includes buy and sell signals we can work out total proft by investing according to our strategy.
+
+
+<br>
+
+```{r}
+
+profit = buy_points - sell_points
+p = sum(profit)
+
+print("Total Predicted Profit:")
+print(p)
+
+```
+
+<h3><ins>5.2 - Actual Profit</ins></h3><br>
+
+
+As a comparison to our predicted function we could calculate total profit on the actual close prices with the same strategy. 
+
+<br>
+
+```{r}
+
+
+sma_05_actual = SMA(amazon_test_with_predict$actual_return, n=05)
+sma_10_actual = SMA(amazon_test_with_predict$actual_return, n=10)
+rsi_05_actual = RSI(amazon_test_with_predict$actual_return, n=5)
+
+sma_05_actual <- sma_05_actual[complete.cases(sma_05_actual)]
+sma_10_actual <- sma_10_actual[complete.cases(sma_10_actual)]
+rsi_05_actual <- rsi_05_actual[complete.cases(rsi_05_actual)]
+
+buying_signal_actual <- NULL
+
+for(i in 1:length(sma_10)) {
+  
+  if (sma_05_actual[i] > sma_10_actual[i] && rsi_05_actual < 40) {
+    
+    buying_signal_actual[i] = 1
+  } else if (sma_05_actual[i] < sma_10_actual[i] || rsi_05_actual > 75) {
+    
+    buying_signal_actual[i] = -1
+  } else {
+    
+    buying_signal_actual[i] = 0
+  }
+  
+}
+
+
+
+```
+
+
+
+```{r}
+
+buying_signal_actual <- buying_signal_actual[1:length(actual_with_dec)]
+buy_sell_decisions_actual <- data.frame(actual_with_dec, pred_with_dec, buying_signal_actual[])
+buy_points_actual <- c()
+sell_points_actual <- c()
+
+for (i in 1:length(actual_with_dec)) {
+  if (buy_sell_decisions$buying_signal[i] == 1) {
+    buy_points_actual <- c(buy_points, buy_sell_decisions$actual_with_dec[i])
+  }
+  else if (buy_sell_decisions$buying_signal[i] == -1) {
+    sell_points_actual <- c(sell_points, buy_sell_decisions$actual_with_dec[i])
+  }
+}
+
+profit_Actual = buy_points_actual - sell_points_actual
+
+d = sum(profit_Actual)
+print("Total Actual Profit")
+print(d)
+
+```
+
+
+                           
+                    
+
+
+
+
+
+
+
+
+
