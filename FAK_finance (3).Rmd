@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The following R notebook aims to evolve financial trading rules using Genetic Programming. 
 
-Automatically formualting trading rules is a huge area, so in order to narrow our scope we have focused on using Genetic Programming to evolve a function of future stock close prices, using this as a means of automatically buying and selling stock.  
+Automatically formualting trading rules is a huge area, so in order to narrow our scope I have focused on using Genetic Programming to evolve a function of future stock close prices, using this as a means of automatically buying and selling stock.  
 
 
 
@@ -40,7 +40,7 @@ library(tsbox)
 
 <h3><ins>2 - Background on the data</ins></h3><br>
 
-We chose to use Amazon stock data as it has nice variation throughout the year. This is beneficial, as our Genetic Program takes a lagged dataframe as input, represenatig N days worth of returns in one row). 
+We chose to use Amazon stock data as it has nice variation throughout the year. This is beneficial, as the Genetic Program takes a lagged dataframe as input, represenatig N days worth of returns in one row). 
 
 Using the lagged data, our GP will predict the `Close` price for the latter half of 2019's stock returns.
 
@@ -91,7 +91,7 @@ plot.ts(amazon_data$y, type='l', col='red',
 
 <h4><ins>2.2 - Split The Data</ins></h4><br>
 
-We created a validation set that takes half the instances, this data will be used to test the accuracy of the Genetic Program.
+Created a validation set that takes half the instances, this data will be used to test the accuracy of the Genetic Program.
 
 <br>
 
@@ -117,7 +117,7 @@ amazon_test <- amazon_test[complete.cases(amazon_test),]
 
 <h4><ins>3.1 - Grammatical Rules</ins></h4><br>
 
-Below we outline the grammatical rules that we used inside our Genetic Program. 
+Below an outline of the grammatical rules that we used inside our Genetic Program. 
 
 The grammar rule operations were as follows:
 
@@ -133,7 +133,7 @@ Together with these simple operataions, We enabled the GP to use four other func
 3. `cos`
 4. `log`
 
-With this relatively basic suite of operations and functions we aimed to evolve a function that predcits a close price given the previous two days' trading figures. 
+With this relatively basic suite of operations and functions aimed to evolve a function that predcits a close price given the previous two days' trading figures. 
 
 <br>
 
@@ -153,7 +153,7 @@ grammer_def <- CreateGrammar(fin_rules)
 <h4><ins>3.2 - Fitness Function</ins></h4><br>
 
 
-With our rules in place, it's simply a case of creating our fitness function. The Genetic Program evolves a solution, whie the fitness function measures the accuracy of this solution based on the input. 
+With our rules in place, it's simply a case of creating our fitness function. The Genetic Program evolves a solution, while the fitness function measures the accuracy of this solution based on the input. 
 
 <br>
 
@@ -232,7 +232,7 @@ d = eval(ge$best$expressions)
 
 <br> 
 
-We can now use these values to plot the predicted returns on the validation set against the actual validation returns. 
+Can now use these values to plot the predicted returns on the validation set against the actual validation returns. 
 
 
 <br>
@@ -265,9 +265,9 @@ points(eval(ge$best$expressions), col = "green", type= "l")
 
 The `GrammaticalEvolver` produces the best expression (it's the best estimation of a function that will accruately make a prediction). 
 
-We access the best exprression through the GP object and create a small function that creates a new column using the optimal, evolved function. 
+Access the best exprression through the GP object and create a small function that creates a new column using the optimal, evolved function. 
 
-We then used the R `transform` method to automatically add a column to output a dataframe using this optimal function. 
+Used the R `transform` method to automatically add a column to output a dataframe using this optimal function. 
 
 <br>
 
@@ -296,7 +296,7 @@ amazon_test_with_predict <- transform(amazon_test, prediction = prediction_funct
 ```
 
 
-We just need to test all of these predictions against their respective testing sets, once that's complete we will then concatenate the values into the one fully predicted stock prices for Amazon. 
+Need to test all of these predictions against their respective testing sets, once that's complete we will then concatenate the values into the one fully predicted stock prices for Amazon. 
 
 <br>
 
@@ -335,7 +335,7 @@ points(amazon_test_with_predict['prediction'], col = "green", type= "l")
 
 <h3><ins>3.5 - Prediction Accuracy</ins></h3><br>
 
-Here we pulled all of our predicted figures into one dataframe to get an idea of how well we have predicted future Close Prices. 
+Here pulled all of our predicted figures into one dataframe to get an idea of how well we have predicted future Close Prices. 
 
 The GP had a `Mean Squared Error` of `4%`. This error could be lower depending on the stock that's being used and the seed being used by the GP to generate the solution.
 
@@ -392,11 +392,11 @@ amazon_total_predict
 
 <h4><ins>4.1 - Simple Moving Averages & RSI</ins></h4><br>
 
-With our predicted function matching with the test data, we can go ahead and begin building our trading rules. 
+With the predicted function matching with the test data, we can go ahead and begin building our trading rules. 
 
 To begin we are going to calculate the 05-day and 10-day `Simple Moving Average`, as well as the stock `RSI` with a 05-day lookback. 
 
-We then need to remove `Null` values from these vectors. 
+Then need to remove `Null` values from these vectors. 
 
 <br>
 
@@ -541,7 +541,7 @@ print(p)
 <h3><ins>5.2 - Actual Profit</ins></h3><br>
 
 
-As a comparison to our predicted function we could calculate total profit on the actual close prices with the same strategy. 
+As a comparison to the predicted function, calculate total profit on the actual close prices with the same strategy. 
 
 <br>
 
