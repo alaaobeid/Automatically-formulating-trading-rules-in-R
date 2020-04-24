@@ -1,6 +1,6 @@
 ---
 title: "Formulating Trading Rules"
-author: "Alaa Mohamed Elobaid (201993916)"
+author: "Alaa Mohamed Elobaid"
 date: "03/04/2020"
 output:
   pdf_document: default
