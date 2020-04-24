@@ -40,7 +40,7 @@ library(tsbox)
 
 <h3><ins>2 - Background on the data</ins></h3><br>
 
-We chose to use Amazon stock data as it has nice variation throughout the year. This is beneficial, as the Genetic Program takes a lagged dataframe as input, represenatig N days worth of returns in one row). 
+Chose to use Amazon stock data as it has nice variation throughout the year. This is beneficial, as the Genetic Program takes a lagged dataframe as input, represenatig N days worth of returns in one row). 
 
 Using the lagged data, our GP will predict the `Close` price for the latter half of 2019's stock returns.
 
