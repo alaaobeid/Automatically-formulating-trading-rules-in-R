@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The following R notebook aims to evolve financial trading rules using Genetic Programming. 
 
-Automatically formualting trading rules is a huge area, so in order to narrow our scope I have focused on using Genetic Programming to evolve a function of future stock close prices, using this as a means of automatically buying and selling stock.  
+Automatically formualting trading rules is a huge area, so in order to narrow the scope I have focused on using Genetic Programming to evolve a function of future stock close prices, using this as a means of automatically buying and selling stock.  
 
 
 
